@@ -1,0 +1,20 @@
+version: 1.0
+runtime: nodejs22
+build:
+  commands:
+    pre-build:
+      - npm ci
+    build:
+      - npx prisma generate
+      - npm run build
+run:
+  runtime-version: 22
+  command: npx prisma migrate deploy && node dist/server.js
+  network:
+    port: 8787
+    env: PORT
+  env:
+    - name: NODE_ENV
+      value: production
+    - name: COOKIE_SECURE
+      value: "true"
