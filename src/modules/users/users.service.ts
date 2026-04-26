@@ -1,17 +1,13 @@
 import { prisma } from '../../config/prisma';
-import { buildPagination, PaginationMeta } from '../../utils/pagination';
 import { errors } from '../../utils/errors';
 import type { Role } from '../../middleware/rbac';
 
-export const listUsers = async (params: {
-  page: number;
-  pageSize: number;
-}): Promise<{ data: unknown[]; pagination: PaginationMeta }> => {
-  const skip = (params.page - 1) * params.pageSize;
-  const [data, totalItems] = await Promise.all([
+export const listUsers = async (params: { page: number; limit: number }) => {
+  const skip = (params.page - 1) * params.limit;
+  const [data, total] = await Promise.all([
     prisma.user.findMany({
       skip,
-      take: params.pageSize,
+      take: params.limit,
       orderBy: { created_at: 'desc' },
       select: {
         id: true,
@@ -26,7 +22,7 @@ export const listUsers = async (params: {
     }),
     prisma.user.count(),
   ]);
-  return { data, pagination: buildPagination(params.page, params.pageSize, totalItems) };
+  return { data, page: params.page, limit: params.limit, total };
 };
 
 export const updateUserRole = async (id: string, role: Role) => {
@@ -35,11 +31,6 @@ export const updateUserRole = async (id: string, role: Role) => {
   return prisma.user.update({
     where: { id },
     data: { role },
-    select: {
-      id: true,
-      github_username: true,
-      role: true,
-      updated_at: true,
-    },
+    select: { id: true, github_username: true, role: true, updated_at: true },
   });
 };
