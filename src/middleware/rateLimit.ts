@@ -1,29 +1,37 @@
 import rateLimit from 'express-rate-limit';
+import { Request } from 'express';
 import { env } from '../config/env';
 
-const buildLimiter = (max: number, windowMs: number) =>
-  rateLimit({
-    windowMs,
-    max,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    handler: (_req, res) => {
-      res.status(429).json({
-        error: {
-          code: 'TOO_MANY_REQUESTS',
-          message: 'Too many requests, please try again later',
-          details: null,
-        },
-      });
+const tooManyHandler = (_req: Request, res: any) => {
+  res.status(429).json({
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many requests, please try again later',
+      details: null,
     },
   });
+};
 
-export const globalRateLimiter = buildLimiter(
-  env.RATE_LIMIT_MAX,
-  env.RATE_LIMIT_WINDOW_MS
-);
+/**
+ * Per-user limiter: keys by authenticated user id when present,
+ * otherwise falls back to ip. Used on non-auth endpoints (TRD: 60 rpm).
+ */
+export const perUserRateLimiter = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  max: env.RATE_LIMIT_MAX,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.sub ?? req.ip ?? 'anonymous',
+  handler: tooManyHandler,
+});
 
-export const authRateLimiter = buildLimiter(
-  env.AUTH_RATE_LIMIT_MAX,
-  env.RATE_LIMIT_WINDOW_MS
-);
+/**
+ * Auth-route limiter: keys by ip (no user yet). TRD: 10 rpm.
+ */
+export const authRateLimiter = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  max: env.AUTH_RATE_LIMIT_MAX,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: tooManyHandler,
+});

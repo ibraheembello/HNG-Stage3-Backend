@@ -5,8 +5,10 @@ import cookieParser from 'cookie-parser';
 
 import { env } from './config/env';
 import { requestLogger } from './middleware/logger';
-import { globalRateLimiter } from './middleware/rateLimit';
+import { perUserRateLimiter } from './middleware/rateLimit';
 import { csrfProtection } from './middleware/csrf';
+import { requireApiVersion } from './middleware/apiVersion';
+import { requireAuth } from './middleware/auth';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 import authRoutes from './modules/auth/auth.routes';
@@ -18,7 +20,6 @@ export const buildApp = (): Application => {
 
   app.set('trust proxy', 1);
 
-  // --- Security & infra ---
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -26,14 +27,18 @@ export const buildApp = (): Application => {
     })
   );
 
-  // CORS — reflects origin so `credentials: true` works for the web portal,
-  // while non-browser clients (CLI / curl) are unaffected by CORS.
   app.use(
     cors({
       origin: (origin, cb) => cb(null, origin || true),
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Request-Id'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-CSRF-Token',
+        'X-Request-Id',
+        'X-API-Version',
+      ],
       exposedHeaders: ['X-Request-Id'],
     })
   );
@@ -42,11 +47,11 @@ export const buildApp = (): Application => {
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
   app.use(requestLogger);
-  app.use(globalRateLimiter);
 
-  // --- Health (unprotected) ---
+  // Health (unprotected, no rate limit)
   app.get('/api/v1/health', (_req, res) => {
     res.json({
+      status: 'success',
       data: {
         status: 'ok',
         env: env.NODE_ENV,
@@ -55,13 +60,27 @@ export const buildApp = (): Application => {
     });
   });
 
-  // CSRF applies before mutating routes — but endpoints decide if they need it
-  // via the middleware itself (it's a no-op for safe methods + Bearer requests).
+  // Auth routes have their own per-route limiter (10/min, ip-keyed)
   app.use('/api/v1/auth', authRoutes);
-  app.use('/api/v1/profiles', csrfProtection, profileRoutes);
-  app.use('/api/v1/users', csrfProtection, userRoutes);
 
-  // --- 404 + error ---
+  // Profile + user routes: TRD requires X-API-Version: 1 + per-user 60/min limit
+  app.use(
+    '/api/v1/profiles',
+    requireApiVersion('1'),
+    requireAuth,
+    perUserRateLimiter,
+    csrfProtection,
+    profileRoutes
+  );
+  app.use(
+    '/api/v1/users',
+    requireApiVersion('1'),
+    requireAuth,
+    perUserRateLimiter,
+    csrfProtection,
+    userRoutes
+  );
+
   app.use(notFoundHandler);
   app.use(errorHandler);
 

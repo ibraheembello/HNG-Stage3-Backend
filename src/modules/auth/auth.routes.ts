@@ -5,7 +5,7 @@ import { requireAuth } from '../../middleware/auth';
 
 const router = Router();
 
-router.post('/github/start', authRateLimiter, ctrl.startGitHub);
+router.post('/github', authRateLimiter, ctrl.startGitHub);
 router.get('/github/callback', ctrl.githubCallback);
 router.post('/github/cli/exchange', authRateLimiter, ctrl.cliExchange);
 router.post('/refresh', authRateLimiter, ctrl.refresh);
