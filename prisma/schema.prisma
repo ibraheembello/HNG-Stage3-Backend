@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  analyst
+}
+
+model User {
+  id              String         @id @default(uuid()) @db.Uuid
+  github_id       String         @unique
+  github_username String         @unique
+  email           String?
+  name            String?
+  avatar_url      String?
+  role            Role           @default(analyst)
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  refresh_tokens  RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  user_id     String    @db.Uuid
+  token_hash  String    @unique
+  expires_at  DateTime
+  revoked_at  DateTime?
+  replaced_by String?   @db.Uuid
+  created_at  DateTime  @default(now())
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("refresh_tokens")
+}
+
+model OAuthState {
+  state          String   @id
+  code_challenge String
+  code_verifier  String?  // populated for web flow only; CLI keeps verifier client-side
+  client_type    String   // 'web' | 'cli'
+  redirect_uri   String?  // web: post-login frontend URL; cli: local loopback callback
+  expires_at     DateTime
+  created_at     DateTime @default(now())
+
+  @@map("oauth_states")
+}
+
+model Profile {
+  id                  String   @id @db.Uuid
+  name                String   @unique
+  gender              String
+  gender_probability  Float
+  age                 Int
+  age_group           String
+  country_id          String   @db.VarChar(2)
+  country_name        String
+  country_probability Float
+  created_at          DateTime @default(now())
+
+  @@map("profiles")
+}
