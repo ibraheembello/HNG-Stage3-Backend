@@ -47,6 +47,7 @@ profiles.json
 
 # --- temp / tooling ---
 _stage2_source
+_screenshots
 .cache
 .turbo
 .next
