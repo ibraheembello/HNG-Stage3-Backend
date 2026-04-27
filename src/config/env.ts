@@ -39,7 +39,10 @@ export const env = {
   REFRESH_TOKEN_TTL: optional(process.env.REFRESH_TOKEN_TTL, '30d'),
 
   WEB_ORIGIN: optional(process.env.WEB_ORIGIN, 'http://localhost:3000'),
-  COOKIE_DOMAIN: optional(process.env.COOKIE_DOMAIN, 'localhost'),
+  // Empty by default — when no Domain is set, the cookie scopes to the exact response
+  // host. That's correct for production (Vercel) and for local dev (localhost). Setting
+  // an explicit Domain causes mismatches with the Vercel rewrite proxy.
+  COOKIE_DOMAIN: optional(process.env.COOKIE_DOMAIN, ''),
   COOKIE_SECURE: optional(process.env.COOKIE_SECURE, 'false') === 'true',
 
   CSRF_SECRET: required('CSRF_SECRET', process.env.CSRF_SECRET),
