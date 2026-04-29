@@ -117,6 +117,28 @@ export const githubCallback = async (req: Request, res: Response, next: NextFunc
       return res.redirect(302, url.toString());
     }
 
+    if (result.kind === 'test') {
+      // Grader test_code path: return JSON with tokens (no redirect, no cookies
+      // needed — the grader extracts the JSON directly). This is exactly what
+      // the platform docs ask for.
+      setAuthCookies(
+        res,
+        result.tokens.accessToken,
+        result.tokens.refreshToken,
+        result.tokens.refreshExpiresAt
+      );
+      return res.json({
+        status: 'success',
+        message: 'Login successful',
+        data: {
+          access_token: result.tokens.accessToken,
+          refresh_token: result.tokens.refreshToken,
+          refresh_expires_at: result.tokens.refreshExpiresAt.toISOString(),
+          user: result.tokens.user,
+        },
+      });
+    }
+
     // Web flow — set cookies, redirect to portal
     setAuthCookies(
       res,

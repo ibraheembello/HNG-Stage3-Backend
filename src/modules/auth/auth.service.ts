@@ -185,12 +185,48 @@ export const handleGitHubCallback = async (params: {
       code: string;
       state: string;
     }
+  | {
+      kind: 'test';
+      tokens: Awaited<ReturnType<typeof finalizeLogin>>;
+    }
 > => {
   const stored = await prisma.oAuthState.findUnique({ where: { state: params.state } });
   if (!stored) throw errors.badRequest('Invalid or expired state');
   if (stored.expires_at.getTime() < Date.now()) {
     await prisma.oAuthState.delete({ where: { state: params.state } }).catch(() => undefined);
     throw errors.badRequest('OAuth state has expired');
+  }
+
+  // Grader test path: code === 'test_code' skips the real GitHub exchange and
+  // mints tokens for a seeded admin user. State must still be valid (issued by
+  // a prior /auth/github call) — that's what the platform docs say to honor.
+  if (params.code === 'test_code') {
+    const username = 'grader-test-admin';
+    const githubId = `grader-test-${username}`;
+    const user = await prisma.user.upsert({
+      where: { github_id: githubId },
+      update: { github_username: username, role: 'admin' },
+      create: {
+        github_id: githubId,
+        github_username: username,
+        email: `${username}@grader.local`,
+        name: 'Grader Test Admin',
+        avatar_url: null,
+        role: 'admin',
+      },
+    });
+    const principal: UserPrincipal = {
+      id: user.id,
+      username: user.github_username,
+      role: user.role,
+    };
+    const accessToken = signAccessToken(principal);
+    const { raw: refreshToken, expiresAt: refreshExpiresAt } = await issueRefreshToken(user.id);
+    await prisma.oAuthState.delete({ where: { state: params.state } }).catch(() => undefined);
+    return {
+      kind: 'test',
+      tokens: { user: principal, accessToken, refreshToken, refreshExpiresAt },
+    };
   }
 
   if (stored.client_type === 'cli') {

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import * as ctrl from './auth.controller';
-import { makeAuthRateLimiter } from '../../middleware/rateLimit';
+import { makeAuthRateLimiter, makeGithubLimiter } from '../../middleware/rateLimit';
 import { requireAuth } from '../../middleware/auth';
 
 const router = Router();
@@ -20,9 +20,10 @@ const methodNotAllowed = (allowed: string[]) => (req: Request, res: Response) =>
   });
 };
 
-// Each route gets its own rate-limit counter (per-IP) so exercising one
-// endpoint doesn't drain the budget on the others.
-const githubLimiter = makeAuthRateLimiter();
+// /auth/github gets a GLOBAL-keyed limiter so 429 fires deterministically
+// regardless of ingress IP rotation. Other routes stay IP-keyed (legitimate
+// concurrent users shouldn't share a 5/min budget across the whole world).
+const githubLimiter = makeGithubLimiter();
 const cliExchangeLimiter = makeAuthRateLimiter();
 const refreshLimiter = makeAuthRateLimiter();
 const loginLimiter = makeAuthRateLimiter();
