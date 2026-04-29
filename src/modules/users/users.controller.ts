@@ -2,7 +2,32 @@ import { Request, Response, NextFunction } from 'express';
 import { errors } from '../../utils/errors';
 import { parsePageParams, buildEnvelope } from '../../utils/pagination';
 import { listUsers, updateUserRole } from './users.service';
+import { prisma } from '../../config/prisma';
 import type { Role } from '../../middleware/rbac';
+
+/** GET /api/users/me — returns the currently authenticated user. */
+export const me = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw errors.unauthorized();
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: {
+        id: true,
+        github_id: true,
+        github_username: true,
+        email: true,
+        name: true,
+        avatar_url: true,
+        role: true,
+        created_at: true,
+      },
+    });
+    if (!user) throw errors.notFound('User not found');
+    res.json({ status: 'success', data: user });
+  } catch (e) {
+    next(e);
+  }
+};
 
 /** GET /api/v1/users */
 export const list = async (req: Request, res: Response, next: NextFunction) => {
