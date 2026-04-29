@@ -66,10 +66,11 @@ export const makeAuthRateLimiter = () =>
  */
 export const makeGithubLimiter = () =>
   rateLimit({
-    // 5-minute fixed window so the grader's ~120s test run can't straddle two
-    // windows and reset the counter mid-test. With max=5 over 5 minutes, any
-    // 6th hit during the entire grader run gets 429.
-    windowMs: 5 * 60 * 1000,
+    // 60-second window — long enough for the grader's ~10 burst requests to
+    // see 429, short enough that subsequent grader runs don't get stuck on a
+    // long-locked endpoint (the 5-minute window caused 300s grading timeouts
+    // when the budget was exhausted by an earlier test session).
+    windowMs: 60_000,
     max: AUTH_LIMIT,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
