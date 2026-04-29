@@ -51,18 +51,49 @@ const clearAuthCookies = (res: Response) => {
   res.clearCookie('csrf_token', { ...accessCookieOpts, httpOnly: false });
 };
 
-/** POST /api/v1/auth/github/start */
+/**
+ * POST  /auth/github  — JSON form, used by CLI (sends own code_challenge) or
+ *                       JS clients that want the authorize URL back.
+ * GET   /auth/github  — Browser flow. Backend generates PKCE server-side,
+ *                       persists state row, and 302-redirects to GitHub.
+ */
 export const startGitHub = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const clientType = (req.body?.client_type ?? 'web') as ClientType;
+    const isGet = req.method === 'GET';
+    const clientType = (
+      isGet
+        ? (req.query.client_type as string | undefined) ?? 'web'
+        : (req.body?.client_type ?? 'web')
+    ) as ClientType;
+
     if (clientType !== 'web' && clientType !== 'cli')
       throw errors.badRequest('client_type must be "web" or "cli"');
 
+    const codeChallenge = isGet
+      ? (req.query.code_challenge as string | undefined)
+      : req.body?.code_challenge;
+    const redirectUri = isGet
+      ? (req.query.redirect_uri as string | undefined)
+      : req.body?.redirect_uri;
+
     const { authorizeUrl, state } = await startOAuth({
       clientType,
-      codeChallenge: req.body?.code_challenge,
-      redirectUri: req.body?.redirect_uri,
+      codeChallenge,
+      redirectUri,
     });
+
+    if (isGet) {
+      // Browser flow: send the user straight to GitHub's authorize page.
+      // Set explicit CORS headers so a browser-side fetcher can read the redirect
+      // target. With credentials, we have to reflect the origin (no wildcard).
+      const origin = req.headers.origin;
+      res.setHeader('Access-Control-Allow-Origin', origin || '*');
+      res.setHeader('Vary', 'Origin');
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
+      return res.redirect(302, authorizeUrl);
+    }
 
     res.json({ data: { authorize_url: authorizeUrl, state } });
   } catch (e) {

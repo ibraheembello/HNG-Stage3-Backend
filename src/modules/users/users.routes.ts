@@ -4,6 +4,7 @@ import { requireRole } from '../../middleware/rbac';
 
 const router = Router();
 
+router.get('/me', ctrl.me);
 router.get('/', requireRole('admin'), ctrl.list);
 router.patch('/:id/role', requireRole('admin'), ctrl.setRole);
 
