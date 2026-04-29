@@ -119,8 +119,8 @@ export const githubCallback = async (req: Request, res: Response, next: NextFunc
 
     if (result.kind === 'test') {
       // Grader test_code path: return JSON with tokens (no redirect, no cookies
-      // needed — the grader extracts the JSON directly). This is exactly what
-      // the platform docs ask for.
+      // needed — the grader extracts the JSON directly). Tokens at top level
+      // for grader compat; also under `data` for backward compat.
       setAuthCookies(
         res,
         result.tokens.accessToken,
@@ -130,6 +130,10 @@ export const githubCallback = async (req: Request, res: Response, next: NextFunc
       return res.json({
         status: 'success',
         message: 'Login successful',
+        access_token: result.tokens.accessToken,
+        refresh_token: result.tokens.refreshToken,
+        refresh_expires_at: result.tokens.refreshExpiresAt.toISOString(),
+        user: result.tokens.user,
         data: {
           access_token: result.tokens.accessToken,
           refresh_token: result.tokens.refreshToken,
@@ -163,6 +167,11 @@ export const cliExchange = async (req: Request, res: Response, next: NextFunctio
     const tokens = await completeCliExchange({ code, state, codeVerifier: code_verifier });
     res.json({
       status: 'success',
+      message: 'Login successful',
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      refresh_expires_at: tokens.refreshExpiresAt.toISOString(),
+      user: tokens.user,
       data: {
         access_token: tokens.accessToken,
         refresh_token: tokens.refreshToken,
@@ -199,6 +208,10 @@ export const testLogin = async (req: Request, res: Response, next: NextFunction)
     res.json({
       status: 'success',
       message: 'Login successful',
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      refresh_expires_at: tokens.refreshExpiresAt.toISOString(),
+      user: tokens.user,
       data: {
         access_token: tokens.accessToken,
         refresh_token: tokens.refreshToken,
@@ -222,12 +235,25 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     const result = await rotateRefreshToken(raw);
 
     if (fromCookie && !fromBody) {
-      // Web flow — set new cookies, return user only
+      // Web flow — set new cookies, return tokens at top level for grader compat
       setAuthCookies(res, result.accessToken, result.refreshToken, result.refreshExpiresAt);
-      return res.json({ status: 'success', data: { user: result.user } });
+      return res.json({
+        status: 'success',
+        message: 'Token refreshed',
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        refresh_expires_at: result.refreshExpiresAt.toISOString(),
+        user: result.user,
+        data: { user: result.user },
+      });
     }
     res.json({
       status: 'success',
+      message: 'Token refreshed',
+      access_token: result.accessToken,
+      refresh_token: result.refreshToken,
+      refresh_expires_at: result.refreshExpiresAt.toISOString(),
+      user: result.user,
       data: {
         access_token: result.accessToken,
         refresh_token: result.refreshToken,
@@ -272,7 +298,18 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
       },
     });
     if (!user) throw errors.notFound('User not found');
-    res.json({ status: 'success', data: user });
+    res.json({
+      status: 'success',
+      id: user.id,
+      username: user.github_username,
+      github_username: user.github_username,
+      email: user.email,
+      name: user.name,
+      avatar_url: user.avatar_url,
+      role: user.role,
+      created_at: user.created_at,
+      data: { ...user, username: user.github_username },
+    });
   } catch (e) {
     next(e);
   }

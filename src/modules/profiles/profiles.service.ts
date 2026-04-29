@@ -84,3 +84,17 @@ export const createProfile = async (input: CreateProfileInput) => {
     data: { id: uuidv7(), ...input },
   });
 };
+
+export const updateProfile = async (
+  id: string,
+  patch: Partial<CreateProfileInput>
+) => {
+  return prisma.profile.update({
+    where: { id },
+    data: patch,
+  });
+};
+
+export const deleteProfile = async (id: string) => {
+  return prisma.profile.delete({ where: { id } });
+};

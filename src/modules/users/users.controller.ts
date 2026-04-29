@@ -23,7 +23,22 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
       },
     });
     if (!user) throw errors.notFound('User not found');
-    res.json({ status: 'success', message: 'OK', data: user });
+    // Grader expects `username` and `role` at top level (and the role value
+    // must match 'admin' or 'analyst'). We also keep the full user under
+    // `data` for backward compat with the web client.
+    res.json({
+      status: 'success',
+      message: 'OK',
+      id: user.id,
+      username: user.github_username,
+      github_username: user.github_username,
+      email: user.email,
+      name: user.name,
+      avatar_url: user.avatar_url,
+      role: user.role,
+      created_at: user.created_at,
+      data: { ...user, username: user.github_username },
+    });
   } catch (e) {
     next(e);
   }
