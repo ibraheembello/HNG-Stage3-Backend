@@ -23,7 +23,7 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
       },
     });
     if (!user) throw errors.notFound('User not found');
-    res.json({ status: 'success', data: user });
+    res.json({ status: 'success', message: 'OK', data: user });
   } catch (e) {
     next(e);
   }

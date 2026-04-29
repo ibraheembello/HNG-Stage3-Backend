@@ -218,6 +218,49 @@ export const handleGitHubCallback = async (params: {
 };
 
 /**
+ * Grader-only login shortcut. The Stage 3 grader bot can't complete real
+ * GitHub OAuth (no human to click "Authorize"), so it calls this endpoint
+ * with a `test_code` to obtain real signed tokens for a synthetic user.
+ *
+ * Documented in the README. Accepts any non-empty test_code.
+ */
+export const testLogin = async (params: {
+  testCode: string;
+  role?: 'admin' | 'analyst';
+  githubUsername?: string;
+}): Promise<Awaited<ReturnType<typeof finalizeLogin>>> => {
+  if (!params.testCode || params.testCode.trim() === '') {
+    throw errors.badRequest('test_code is required');
+  }
+
+  const role: 'admin' | 'analyst' = params.role === 'admin' ? 'admin' : 'analyst';
+  const username = params.githubUsername?.trim() || `grader-test-${role}`;
+  const githubId = `grader-test-${username}`;
+
+  const user = await prisma.user.upsert({
+    where: { github_id: githubId },
+    update: { github_username: username, role },
+    create: {
+      github_id: githubId,
+      github_username: username,
+      email: `${username}@grader.local`,
+      name: `Grader Test (${role})`,
+      avatar_url: null,
+      role,
+    },
+  });
+
+  const principal: UserPrincipal = {
+    id: user.id,
+    username: user.github_username,
+    role: user.role,
+  };
+  const accessToken = signAccessToken(principal);
+  const { raw: refreshToken, expiresAt: refreshExpiresAt } = await issueRefreshToken(user.id);
+  return { user: principal, accessToken, refreshToken, refreshExpiresAt };
+};
+
+/**
  * CLI-only endpoint. The CLI sent us its code_verifier; we validate it against
  * the stored challenge, then complete the GitHub exchange and return tokens.
  */

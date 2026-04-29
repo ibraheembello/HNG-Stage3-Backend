@@ -54,3 +54,4 @@ _screenshots
 .parcel-cache
 .tmp
 tmp/
+.claude/

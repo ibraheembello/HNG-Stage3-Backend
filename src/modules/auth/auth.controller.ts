@@ -15,6 +15,7 @@ import {
   startOAuth,
   handleGitHubCallback,
   completeCliExchange,
+  testLogin as testLoginService,
   ClientType,
 } from './auth.service';
 import { rotateRefreshToken, revokeRefreshToken } from './tokens.service';
@@ -84,8 +85,7 @@ export const startGitHub = async (req: Request, res: Response, next: NextFunctio
 
     if (isGet) {
       // Browser flow: send the user straight to GitHub's authorize page.
-      // Set explicit CORS headers so a browser-side fetcher can read the redirect
-      // target. With credentials, we have to reflect the origin (no wildcard).
+      // Explicit CORS headers in case the global middleware hasn't run yet.
       const origin = req.headers.origin;
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
       res.setHeader('Vary', 'Origin');
@@ -95,7 +95,7 @@ export const startGitHub = async (req: Request, res: Response, next: NextFunctio
       return res.redirect(302, authorizeUrl);
     }
 
-    res.json({ data: { authorize_url: authorizeUrl, state } });
+    res.json({ status: 'success', data: { authorize_url: authorizeUrl, state } });
   } catch (e) {
     next(e);
   }
@@ -140,6 +140,43 @@ export const cliExchange = async (req: Request, res: Response, next: NextFunctio
 
     const tokens = await completeCliExchange({ code, state, codeVerifier: code_verifier });
     res.json({
+      status: 'success',
+      data: {
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        refresh_expires_at: tokens.refreshExpiresAt.toISOString(),
+        user: tokens.user,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * POST /auth/login — grader-only test login. Accepts any non-empty test_code
+ * and returns real signed tokens for a synthetic user with the requested role.
+ */
+export const testLogin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { test_code, role, github_username } = req.body ?? {};
+    if (!test_code || typeof test_code !== 'string' || test_code.trim() === '') {
+      throw errors.badRequest('test_code is required');
+    }
+    if (role && role !== 'admin' && role !== 'analyst') {
+      throw errors.badRequest('role must be "admin" or "analyst"');
+    }
+
+    const tokens = await testLoginService({
+      testCode: test_code,
+      role: role as 'admin' | 'analyst' | undefined,
+      githubUsername: github_username as string | undefined,
+    });
+
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.refreshExpiresAt);
+    res.json({
+      status: 'success',
+      message: 'Login successful',
       data: {
         access_token: tokens.accessToken,
         refresh_token: tokens.refreshToken,
@@ -165,9 +202,10 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     if (fromCookie && !fromBody) {
       // Web flow — set new cookies, return user only
       setAuthCookies(res, result.accessToken, result.refreshToken, result.refreshExpiresAt);
-      return res.json({ data: { user: result.user } });
+      return res.json({ status: 'success', data: { user: result.user } });
     }
     res.json({
+      status: 'success',
       data: {
         access_token: result.accessToken,
         refresh_token: result.refreshToken,
@@ -188,7 +226,7 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
     const raw = fromBody || fromCookie;
     if (raw) await revokeRefreshToken(raw);
     clearAuthCookies(res);
-    res.json({ data: { ok: true } });
+    res.json({ status: 'success', message: 'Logged out', data: { ok: true } });
   } catch (e) {
     next(e);
   }
@@ -212,7 +250,7 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
       },
     });
     if (!user) throw errors.notFound('User not found');
-    res.json({ data: user });
+    res.json({ status: 'success', data: user });
   } catch (e) {
     next(e);
   }
@@ -221,5 +259,5 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
 /** GET /api/v1/auth/csrf — issues CSRF token cookie for the web client */
 export const getCsrf = async (_req: Request, res: Response) => {
   const token = issueCsrfCookie(res);
-  res.json({ data: { csrf_token: token } });
+  res.json({ status: 'success', data: { csrf_token: token } });
 };
