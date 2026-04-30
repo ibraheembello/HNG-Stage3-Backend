@@ -55,3 +55,8 @@ _screenshots
 .tmp
 tmp/
 .claude/
+
+# Personal interview prep notes — never commit
+interview-prep.html
+interview-prep.md
+_interview-prep/
