@@ -13,6 +13,7 @@ import { errorHandler, notFoundHandler } from './middleware/error';
 import authRoutes from './modules/auth/auth.routes';
 import profileRoutes from './modules/profiles/profiles.routes';
 import userRoutes from './modules/users/users.routes';
+import { docsRouter } from './docs/swagger';
 
 /**
  * Permissive, always-on CORS middleware. Replaces the cors npm package so
@@ -62,7 +63,28 @@ export const buildApp = (): Application => {
   app.use(cookieParser());
   app.use(requestLogger);
 
-  // Health (unprotected, no rate limit) — exposed at multiple paths.
+  /**
+   * @openapi
+   * /health:
+   *   get:
+   *     tags: [Health]
+   *     summary: Liveness probe
+   *     responses:
+   *       200:
+   *         description: Service healthy
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 status: { type: string, example: success }
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     status: { type: string, example: ok }
+   *                     env: { type: string, example: production }
+   *                     time: { type: string, format: date-time }
+   */
   const health = (_req: Request, res: Response) => {
     res.json({
       status: 'success',
@@ -76,6 +98,11 @@ export const buildApp = (): Application => {
   app.get('/api/v1/health', health);
   app.get('/api/health', health);
   app.get('/health', health);
+
+  // Swagger UI — public, no auth required. Mounted at /api/docs (canonical) and
+  // /docs (alias) so it's discoverable from any prefix the client uses.
+  app.use('/api/docs', docsRouter);
+  app.use('/docs', docsRouter);
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
   // Mounted at multiple prefixes so that whichever path the client (web /
